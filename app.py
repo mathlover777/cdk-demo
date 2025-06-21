@@ -1,28 +1,44 @@
 #!/usr/bin/env python3
 import os
-
-import aws_cdk as cdk
-
+import sys
+from aws_cdk import App, Environment
 from cdk_demo.cdk_demo_stack import CdkDemoStack
 
-
-app = cdk.App()
-CdkDemoStack(app, "CdkDemoStack",
-    # If you don't specify 'env', this stack will be environment-agnostic.
-    # Account/Region-dependent features and context lookups will not work,
-    # but a single synthesized template can be deployed anywhere.
-
-    # Uncomment the next line to specialize this stack for the AWS Account
-    # and Region that are implied by the current CLI configuration.
-
-    #env=cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION')),
-
-    # Uncomment the next line if you know exactly what Account and Region you
-    # want to deploy the stack to. */
-
-    #env=cdk.Environment(account='123456789012', region='us-east-1'),
-
-    # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
+def main():
+    app = App()
+    
+    # Get stage from context or command line argument
+    stage = app.node.try_get_context('stage') or 'dev'
+    name = app.node.try_get_context('name') or 'poc-backend'
+    
+    # Validate stage
+    valid_stages = ['dev', 'staging', 'prod']
+    if stage not in valid_stages:
+        print(f"Error: Invalid stage '{stage}'. Valid stages are: {', '.join(valid_stages)}")
+        sys.exit(1)
+    
+    # Get AWS environment from context or use defaults
+    env = Environment(
+        account=app.node.try_get_context('account') or os.getenv('CDK_DEFAULT_ACCOUNT'),
+        region=app.node.try_get_context('region') or os.getenv('CDK_DEFAULT_REGION') or 'us-east-1'
     )
+    
+    # Create stack with stage-specific configuration
+    stack_name = f"{name}-{stage}"
+    
+    CdkDemoStack(
+        app, 
+        stack_name,
+        stage=stage,
+        env=env,
+        description=f"POC Backend Stack for {stage} environment"
+    )
+    
+    # Add tags to the app
+    app.node.add_metadata('stage', stage)
+    app.node.add_metadata('name', name)
+    
+    app.synth()
 
-app.synth()
+if __name__ == "__main__":
+    main()
