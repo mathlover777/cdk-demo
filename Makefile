@@ -18,9 +18,13 @@ help:
 	@echo ""
 	@echo "$(YELLOW)Deployment:$(NC)"
 	@echo "  make deploy [STAGE=dev]     - Deploy to specified stage (default: dev)"
+	@echo "  make deploy-networking [STAGE=dev] - Deploy only networking stack"
+	@echo "  make deploy-backend [STAGE=dev]    - Deploy only backend stack"
 	@echo "  make destroy [STAGE=dev]    - Destroy specified stage"
 	@echo "  make diff [STAGE=dev]       - Show differences before deployment"
 	@echo "  make synth [STAGE=dev]      - Synthesize CloudFormation template"
+	@echo "  make synth-networking [STAGE=dev] - Synthesize only networking stack"
+	@echo "  make synth-backend [STAGE=dev]    - Synthesize only backend stack"
 	@echo "  make bootstrap              - Bootstrap CDK (first time only)"
 	@echo ""
 	@echo "$(YELLOW)Local Development:$(NC)"
@@ -47,11 +51,19 @@ bootstrap:
 # Deployment commands
 deploy:
 	@echo "$(GREEN)Deploying to $(STAGE) environment...$(NC)"
-	cdk deploy --context stage=$(STAGE) --require-approval never
+	cdk deploy --all --context stage=$(STAGE) --require-approval never
+
+deploy-networking:
+	@echo "$(GREEN)Deploying networking stack to $(STAGE) environment...$(NC)"
+	cdk deploy poc-networking-$(STAGE) --context stage=$(STAGE) --require-approval never
+
+deploy-backend:
+	@echo "$(GREEN)Deploying backend stack to $(STAGE) environment...$(NC)"
+	cdk deploy poc-backend-$(STAGE) --context stage=$(STAGE) --require-approval never
 
 destroy:
 	@echo "$(YELLOW)Destroying $(STAGE) environment...$(NC)"
-	cdk destroy --context stage=$(STAGE) --force
+	cdk destroy --all --context stage=$(STAGE) --force
 
 diff:
 	@echo "$(GREEN)Showing differences for $(STAGE) environment...$(NC)"
@@ -60,6 +72,14 @@ diff:
 synth:
 	@echo "$(GREEN)Synthesizing CloudFormation template for $(STAGE)...$(NC)"
 	cdk synth --context stage=$(STAGE)
+
+synth-networking:
+	@echo "$(GREEN)Synthesizing networking stack for $(STAGE)...$(NC)"
+	cdk synth poc-networking-$(STAGE) --context stage=$(STAGE)
+
+synth-backend:
+	@echo "$(GREEN)Synthesizing backend stack for $(STAGE)...$(NC)"
+	cdk synth poc-backend-$(STAGE) --context stage=$(STAGE)
 
 # Local development
 local-build:
