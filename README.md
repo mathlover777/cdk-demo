@@ -1,6 +1,6 @@
 # POC Backend - FastAPI with AWS CDK
 
-This project deploys a FastAPI backend application using AWS CDK with Fargate, Application Load Balancer, and custom domain configuration.
+This project deploys a FastAPI backend application using AWS CDK with Fargate, Application Load Balancer, and custom domain configuration. The CDK code is structured to support multiple stacks as the project grows.
 
 ## Architecture
 
@@ -22,8 +22,14 @@ cdk-demo/
 │   └── Dockerfile               # Container definition
 ├── cdk_demo/                     # CDK stack definitions
 │   ├── __init__.py
-│   ├── cdk_demo_stack.py        # Main CDK stack
-│   └── config.py                # Configuration management
+│   ├── utils/                    # Shared utilities
+│   │   ├── __init__.py
+│   │   └── config.py            # Configuration management
+│   └── stacks/                   # Stack definitions
+│       ├── __init__.py
+│       └── backend/              # Backend stack
+│           ├── __init__.py
+│           └── backend_stack.py  # Backend infrastructure
 ├── env.base.example              # Example base environment configuration
 ├── env.dev.example               # Example development environment configuration
 ├── env.base                      # Base environment configuration (create from env.base.example)
@@ -36,7 +42,7 @@ cdk-demo/
 
 ## Environment Configuration
 
-The project uses a two-tier configuration system. **Never commit your actual environment files to git** - they contain sensitive information.
+The project uses a two-tier configuration system with support for multiple stacks. **Never commit your actual environment files to git** - they contain sensitive information.
 
 ### Setup Environment Files
 
@@ -49,7 +55,7 @@ The project uses a two-tier configuration system. **Never commit your actual env
 2. **Edit the files with your actual values** (see sections below)
 
 ### Base Configuration (`env.base`)
-Common configurations for all stages:
+Common configurations shared across all stacks:
 - AWS Region
 - Domain name
 - SSL certificate ARN
@@ -57,10 +63,10 @@ Common configurations for all stages:
 
 ### Stage Configuration (`env.dev`, `env.staging`, `env.prod`)
 Stage-specific configurations:
-- Stage name
 - Subdomain
 - Container count
 - Scaling parameters
+- Environment variables
 
 ## How to Get Required Values
 
@@ -171,24 +177,32 @@ Create environment files based on your requirements:
 
 **Base Configuration (`env.base`)**:
 ```
+# Common Configuration (Shared across all stacks)
 AWS_REGION=us-east-1
 DOMAIN_NAME=your-domain.com
 CERTIFICATE_ARN=arn:aws:acm:us-east-1:123456789012:certificate/your-certificate-id
+
+# Backend Stack Configuration
 APP_NAME=poc-backend
 APP_PORT=8000
 APP_MEMORY=512
 APP_CPU=256
+CONTAINER_IMAGE_TAG=latest
 ```
 
 **Development Configuration (`env.dev`)**:
 ```
-STAGE=dev
-STACK_NAME=poc-backend-dev
+# Domain Configuration
 SUBDOMAIN=demo-dev
+
+# Backend Stack Configuration
 CONTAINER_COUNT=1
-CONTAINER_IMAGE_TAG=dev
+
+# Scaling Configuration
 MIN_CAPACITY=1
 MAX_CAPACITY=2
+
+# Environment Variables
 ENVIRONMENT=development
 LOG_LEVEL=DEBUG
 ```
@@ -223,13 +237,13 @@ make synth STAGE=dev
 
 ```bash
 # Deploy to development
-cdk deploy --context stage=dev --context name=poc-backend
+cdk deploy --context stage=dev
 
 # Deploy to staging
-cdk deploy --context stage=staging --context name=poc-backend
+cdk deploy --context stage=staging
 
 # Deploy to production
-cdk deploy --context stage=prod --context name=poc-backend
+cdk deploy --context stage=prod
 ```
 
 ### Available Makefile Commands
@@ -324,6 +338,66 @@ make local-stop
 ### Route53
 - Custom subdomain routing
 - A and CNAME records for load balancer
+
+## CDK Structure
+
+The CDK code is organized to support multiple stacks as your project grows:
+
+### Current Stacks
+- **Backend Stack** (`stacks/backend/backend_stack.py`): FastAPI application with Fargate, ALB, and Route53
+
+### Adding New Stacks
+
+To add a new stack (e.g., database, cache, etc.):
+
+1. **Create stack directory:**
+   ```bash
+   mkdir -p cdk_demo/stacks/database
+   touch cdk_demo/stacks/database/__init__.py
+   touch cdk_demo/stacks/database/database_stack.py
+   ```
+
+2. **Create the stack class:**
+   ```python
+   # cdk_demo/stacks/database/database_stack.py
+   from aws_cdk import Stack
+   from constructs import Construct
+   from ...utils.config import Config
+   
+   class DatabaseStack(Stack):
+       def __init__(self, scope: Construct, construct_id: str, stage: str, **kwargs):
+           super().__init__(scope, construct_id, **kwargs)
+           self.config = Config(stage)
+           # Add your database resources here
+   ```
+
+3. **Add configuration to env files:**
+   ```bash
+   # env.base - Add common database config
+   DB_INSTANCE_TYPE=db.t3.micro
+   DB_STORAGE_SIZE=20
+   
+   # env.dev - Add stage-specific config
+   DB_INSTANCE_NAME=poc-backend-dev-db
+   ```
+
+4. **Deploy the stack in app.py:**
+   ```python
+   from cdk_demo.stacks.database.database_stack import DatabaseStack
+   
+   # Add to main()
+   DatabaseStack(
+       app,
+       f"poc-database-{stage}",
+       stage=stage,
+       env=env,
+       description=f"POC Database Stack for {stage} environment"
+   )
+   ```
+
+### Shared Utilities
+- **Config** (`utils/config.py`): Environment configuration management
+- **Future utilities**: Common constructs, helper functions, etc.
 
 ## Monitoring and Logging
 

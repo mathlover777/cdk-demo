@@ -9,14 +9,14 @@ from aws_cdk import (
     aws_iam as iam,
     aws_logs as logs,
     aws_ecr_assets as ecr_assets,
+    aws_applicationautoscaling as appscaling,
     Duration,
     CfnOutput,
-    RemovalPolicy,
 )
 from constructs import Construct
-from .config import Config
+from ...utils.config import Config
 
-class CdkDemoStack(Stack):
+class BackendStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, stage: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -49,7 +49,7 @@ class CdkDemoStack(Stack):
             self.config.get("CERTIFICATE_ARN")
         )
         
-        # Create ECS Cluster with latest patterns
+        # Create ECS Cluster
         cluster = ecs.Cluster(
             self, "PocBackendCluster",
             vpc=vpc,
@@ -121,8 +121,22 @@ class CdkDemoStack(Stack):
             task_definition=task_definition,
             service_name=f"poc-backend-{stage}",
             desired_count=int(self.config.get("CONTAINER_COUNT", 1)),
-            assign_public_ip=False,  # Better security practice
+            assign_public_ip=False,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
+        )
+        
+        # Configure Auto Scaling
+        scaling = service.auto_scale_task_count(
+            min_capacity=1,
+            max_capacity=2
+        )
+        
+        # Add CPU-based scaling policy
+        scaling.scale_on_cpu_utilization(
+            "CpuScaling",
+            target_utilization_percent=70,
+            scale_in_cooldown=Duration.seconds(60),
+            scale_out_cooldown=Duration.seconds(60)
         )
         
         # Add target group to ALB
@@ -148,7 +162,7 @@ class CdkDemoStack(Stack):
             domain_name=self.config.get("DOMAIN_NAME")
         )
         
-        # Create A record (preferred for load balancers)
+        # Create A record
         route53.ARecord(
             self, "PocBackendARecord",
             zone=hosted_zone,
@@ -201,4 +215,4 @@ class CdkDemoStack(Stack):
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")
             ]
-        )
+        ) 

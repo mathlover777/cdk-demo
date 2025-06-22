@@ -3,8 +3,6 @@
 
 # Variables
 STAGE ?= dev
-NAME ?= poc-backend
-STACK_NAME = $(NAME)-$(STAGE)
 
 # Colors for output
 GREEN = \033[0;32m
@@ -49,26 +47,24 @@ bootstrap:
 # Deployment commands
 deploy:
 	@echo "$(GREEN)Deploying to $(STAGE) environment...$(NC)"
-	@echo "Stack name: $(STACK_NAME)"
-	cdk deploy --context stage=$(STAGE) --context name=$(NAME) --require-approval never
+	cdk deploy --context stage=$(STAGE) --require-approval never
 
 destroy:
 	@echo "$(YELLOW)Destroying $(STAGE) environment...$(NC)"
-	@echo "Stack name: $(STACK_NAME)"
-	cdk destroy --context stage=$(STAGE) --context name=$(NAME) --force
+	cdk destroy --context stage=$(STAGE) --force
 
 diff:
 	@echo "$(GREEN)Showing differences for $(STAGE) environment...$(NC)"
-	cdk diff --context stage=$(STAGE) --context name=$(NAME)
+	cdk diff --context stage=$(STAGE)
 
 synth:
 	@echo "$(GREEN)Synthesizing CloudFormation template for $(STAGE)...$(NC)"
-	cdk synth --context stage=$(STAGE) --context name=$(NAME)
+	cdk synth --context stage=$(STAGE)
 
 # Local development
 local-build:
 	@echo "$(GREEN)Building Docker image locally for testing...$(NC)"
-	docker build -f Dockerfiles/Dockerfile -t $(NAME):latest .
+	docker build -f Dockerfiles/Dockerfile -t poc-backend:latest .
 
 local-run:
 	@echo "$(GREEN)Starting local development environment...$(NC)"
