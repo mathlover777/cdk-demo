@@ -8,7 +8,6 @@ from aws_cdk import (
     aws_certificatemanager as acm,
     aws_logs as logs,
     aws_ecr_assets as ecr_assets,
-    aws_applicationautoscaling as appscaling,
     Duration,
     CfnOutput,
     Fn,
