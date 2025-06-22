@@ -2,6 +2,7 @@
 import os
 import sys
 from aws_cdk import App, Environment
+from cdk_demo.stacks.networking.vpc_stack import NetworkingStack
 from cdk_demo.stacks.backend.backend_stack import BackendStack
 
 def main():
@@ -22,14 +23,26 @@ def main():
         region=os.getenv('CDK_DEFAULT_REGION') or 'us-east-1'
     )
     
-    # Deploy Backend Stack
-    BackendStack(
+    # Deploy Networking Stack first
+    networking_stack = NetworkingStack(
+        app, 
+        f"poc-networking-{stage}",
+        stage=stage,
+        env=env,
+        description=f"POC Backend Networking Stack for {stage} environment"
+    )
+    
+    # Deploy Backend Stack (depends on networking stack)
+    backend_stack = BackendStack(
         app, 
         f"poc-backend-{stage}",
         stage=stage,
         env=env,
         description=f"POC Backend Stack for {stage} environment"
     )
+    
+    # Add dependency: backend stack depends on networking stack
+    backend_stack.add_dependency(networking_stack)
     
     # Add tags to the app
     app.node.add_metadata('stage', stage)

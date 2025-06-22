@@ -6,15 +6,16 @@ from aws_cdk import (
     aws_route53 as route53,
     aws_route53_targets as targets,
     aws_certificatemanager as acm,
-    aws_iam as iam,
     aws_logs as logs,
     aws_ecr_assets as ecr_assets,
     aws_applicationautoscaling as appscaling,
     Duration,
     CfnOutput,
+    Fn,
 )
 from constructs import Construct
 from ...utils.config import Config
+from ..shared.roles import create_execution_role, create_task_role
 
 class BackendStack(Stack):
 
@@ -24,29 +25,46 @@ class BackendStack(Stack):
         # Load configuration
         self.config = Config(stage)
         
-        # Create VPC
-        vpc = ec2.Vpc(
-            self, "PocBackendVPC",
-            max_azs=2,
-            nat_gateways=1,
-            subnet_configuration=[
-                ec2.SubnetConfiguration(
-                    name="public",
-                    subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=24
-                ),
-                ec2.SubnetConfiguration(
-                    name="private",
-                    subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
-                    cidr_mask=24
-                )
-            ]
+        # Import VPC from networking stack
+        vpc = ec2.Vpc.from_vpc_attributes(
+            self, "ImportedVPC",
+            vpc_id=Fn.import_value(f"poc-networking-{stage}-vpc-id"),
+            public_subnet_ids=Fn.import_value(f"poc-networking-{stage}-public-subnet-ids").split(","),
+            private_subnet_ids=Fn.import_value(f"poc-networking-{stage}-private-subnet-ids").split(","),
+            availability_zones=Fn.import_value(f"poc-networking-{stage}-azs").split(",")
         )
         
-        # Import the certificate
+        # Create subnet objects for ALB (needs proper subnet objects, not just IDs)
+        public_subnet_ids = Fn.split(",", Fn.import_value(f"poc-networking-{stage}-public-subnet-ids"))
+        public_subnets = [
+            ec2.Subnet.from_subnet_id(self, f"PublicSubnet{i}", Fn.select(i, public_subnet_ids))
+            for i in range(2)  # We know we have 2 AZs
+        ]
+        
+        # Create subnet objects for ECS service
+        private_subnet_ids = Fn.split(",", Fn.import_value(f"poc-networking-{stage}-private-subnet-ids"))
+        private_subnets = [
+            ec2.Subnet.from_subnet_id(self, f"PrivateSubnet{i}", Fn.select(i, private_subnet_ids))
+            for i in range(2)  # We know we have 2 AZs
+        ]
+        
+        # Import certificate from networking stack
         certificate = acm.Certificate.from_certificate_arn(
-            self, "Certificate",
-            self.config.get("CERTIFICATE_ARN")
+            self, "ImportedCertificate",
+            Fn.import_value(f"poc-networking-{stage}-certificate-arn")
+        )
+        
+        # Import security groups from networking stack
+        alb_security_group = ec2.SecurityGroup.from_security_group_id(
+            self, "ImportedAlbSecurityGroup",
+            Fn.import_value(f"poc-networking-{stage}-alb-security-group-id"),
+            allow_all_outbound=True
+        )
+        
+        ecs_security_group = ec2.SecurityGroup.from_security_group_id(
+            self, "ImportedEcsSecurityGroup",
+            Fn.import_value(f"poc-networking-{stage}-ecs-security-group-id"),
+            allow_all_outbound=True
         )
         
         # Create ECS Cluster
@@ -57,13 +75,17 @@ class BackendStack(Stack):
             enable_fargate_capacity_providers=True
         )
         
+        # Create roles using shared utilities
+        execution_role = create_execution_role(self, "PocBackend", f"poc-backend-{stage}")
+        task_role = create_task_role(self, "PocBackend", f"poc-backend-{stage}")
+        
         # Create Task Definition
         task_definition = ecs.FargateTaskDefinition(
             self, "PocBackendTaskDef",
             memory_limit_mib=int(self.config.get("APP_MEMORY", 512)),
             cpu=int(self.config.get("APP_CPU", 256)),
-            execution_role=self._create_execution_role(),
-            task_role=self._create_task_role()
+            execution_role=execution_role,
+            task_role=task_role
         )
         
         # Add container to task definition
@@ -98,7 +120,9 @@ class BackendStack(Stack):
             self, "PocBackendALB",
             vpc=vpc,
             internet_facing=True,
-            load_balancer_name=f"poc-backend-{stage}-alb"
+            load_balancer_name=f"poc-backend-{stage}-alb",
+            security_group=alb_security_group,
+            vpc_subnets=ec2.SubnetSelection(subnets=public_subnets)
         )
         
         # Create HTTPS listener
@@ -122,7 +146,8 @@ class BackendStack(Stack):
             service_name=f"poc-backend-{stage}",
             desired_count=int(self.config.get("CONTAINER_COUNT", 1)),
             assign_public_ip=False,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
+            vpc_subnets=ec2.SubnetSelection(subnets=private_subnets),
+            security_groups=[ecs_security_group]
         )
         
         # Configure Auto Scaling
@@ -189,30 +214,4 @@ class BackendStack(Stack):
             self, "ClusterName",
             value=cluster.cluster_name,
             description="Name of the ECS cluster"
-        )
-        
-        CfnOutput(
-            self, "VPCId",
-            value=vpc.vpc_id,
-            description="VPC ID"
-        )
-    
-    def _create_execution_role(self) -> iam.Role:
-        """Create execution role for ECS tasks"""
-        return iam.Role(
-            self, "PocBackendExecutionRole",
-            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")
-            ]
-        )
-    
-    def _create_task_role(self) -> iam.Role:
-        """Create task role for ECS tasks"""
-        return iam.Role(
-            self, "PocBackendTaskRole",
-            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")
-            ]
         ) 
