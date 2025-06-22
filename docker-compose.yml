@@ -1,10 +1,12 @@
+version: '3.8'
+
 services:
-  fastapi:
+  api:
     build:
       context: .
-      dockerfile: Dockerfiles/Dockerfile
+      dockerfile: Dockerfiles/api.Dockerfile
     platform: linux/arm64
-    container_name: poc-backend-fastapi
+    container_name: poc-backend-api
     ports:
       - "8000:8000"
     environment:
@@ -12,5 +14,43 @@ services:
       - LOG_LEVEL=DEBUG
       - STAGE=dev
     volumes:
-      - ./src:/app
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 
+      - ./src:/app/src
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    networks:
+      - poc-network
+
+  # Example gRPC service (uncomment when needed)
+  # grpc-service:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfiles/grpc-service.Dockerfile
+  #   platform: linux/arm64
+  #   container_name: poc-backend-grpc
+  #   ports:
+  #     - "50051:50051"
+  #   environment:
+  #     - ENVIRONMENT=development
+  #     - LOG_LEVEL=DEBUG
+  #   volumes:
+  #     - ./src/grpc-service:/app/grpc-service
+  #   networks:
+  #     - poc-network
+
+  # Example worker service (uncomment when needed)
+  # worker-service:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfiles/worker-service.Dockerfile
+  #   platform: linux/arm64
+  #   container_name: poc-backend-worker
+  #   environment:
+  #     - ENVIRONMENT=development
+  #     - LOG_LEVEL=DEBUG
+  #   volumes:
+  #     - ./src/worker-service:/app/worker-service
+  #   networks:
+  #     - poc-network
+
+networks:
+  poc-network:
+    driver: bridge 
