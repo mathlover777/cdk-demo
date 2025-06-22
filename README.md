@@ -29,7 +29,7 @@ cdk-demo/
 ├── env.base                      # Base environment configuration (create from env.base.example)
 ├── env.dev                       # Development environment configuration (create from env.dev.example)
 ├── app.py                        # CDK application entry point
-├── deploy.sh                     # Deployment script
+├── Makefile                      # Build and deployment automation
 ├── requirements.txt              # CDK dependencies
 └── README.md                     # This file
 ```
@@ -195,25 +195,28 @@ LOG_LEVEL=DEBUG
 
 ## Deployment
 
-### Using the Deployment Script
+### Using the Makefile (Recommended)
 
-The easiest way to deploy is using the provided script:
+The easiest way to deploy is using the provided Makefile:
 
 ```bash
 # Deploy to development
-./deploy.sh dev deploy
+make deploy-dev
 
 # Deploy to staging
-./deploy.sh staging deploy
+make deploy STAGE=staging
 
 # Deploy to production
-./deploy.sh prod deploy
+make deploy STAGE=prod
 
 # Show differences before deployment
-./deploy.sh dev diff
+make diff STAGE=dev
 
 # Destroy a stack
-./deploy.sh dev destroy
+make destroy STAGE=dev
+
+# Synthesize CloudFormation template
+make synth STAGE=dev
 ```
 
 ### Using CDK Directly
@@ -229,17 +232,38 @@ cdk deploy --context stage=staging --context name=poc-backend
 cdk deploy --context stage=prod --context name=poc-backend
 ```
 
-### Using Makefile
+### Available Makefile Commands
 
 ```bash
-# Deploy to development
-make deploy-dev
+# Show all available commands
+make help
 
-# Deploy to staging
-make deploy STAGE=staging
+# Deployment
+make deploy [STAGE=dev]     # Deploy to specified stage (default: dev)
+make destroy [STAGE=dev]    # Destroy specified stage
+make diff [STAGE=dev]       # Show differences before deployment
+make synth [STAGE=dev]      # Synthesize CloudFormation template
+make bootstrap              # Bootstrap CDK (first time only)
 
-# Deploy to production
-make deploy STAGE=prod
+# Local Development
+make local-build            # Build Docker image locally (for testing)
+make local-run              # Run with Docker Compose
+make local-stop             # Stop Docker Compose
+make test                   # Run tests
+
+# Utilities
+make install                # Install Python dependencies
+make clean                  # Clean up generated files
+make logs [STAGE=dev]       # View CloudWatch logs
+make validate [STAGE=dev]   # Validate configuration
+
+# Convenience targets
+make deploy-dev             # Deploy to development
+make deploy-staging         # Deploy to staging
+make deploy-prod            # Deploy to production
+make destroy-dev            # Destroy development
+make destroy-staging        # Destroy staging
+make destroy-prod           # Destroy production
 ```
 
 ## API Endpoints
